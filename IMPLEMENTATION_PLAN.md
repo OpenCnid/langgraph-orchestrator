@@ -1,9 +1,9 @@
 # Implementation Plan — LangGraph Orchestrator
 
-**Status:** P1-P4 complete. Core routing logic implemented.
+**Status:** ALL PRIORITIES COMPLETE (P1-P14). Full orchestrator implemented.
 **Goal:** Working LangGraph-based subagent spawner + merger implementing the Agent Architecture.
 
-**Last Updated:** 2026-03-05 — P1-P12 complete. 141 tests passing, lint clean.
+**Last Updated:** 2026-03-05 — P1-P14 complete. 163 tests passing, lint clean.
 
 Key learnings:
 - Skills are prompt files without mermaid diagrams — parser handles this
@@ -106,17 +106,17 @@ Key learnings:
 
 ## Priority 13 — Memory & Review Cycle (specs/memory.md)
 
-- [ ] **P13.1 — Execution history store** (`src/memory.py`): Log successful sequences as proven routes. Log failures alongside (archived, never deleted). Written at session end.
-- [ ] **P13.2 — User profile store** (`src/memory.py`): Capture explicit preferences + observed patterns. Written on correction/override. Loaded at session start.
-- [ ] **P13.3 — Session summary generator**: Produce ~1k token summary at session end. Clean, ready for next session start.
-- [ ] **P13.4 — Review cycle**: After outcomes, classify → write memory → synthesize → session summary. For atlas: archive stale piece → draft replacement → cascade check.
-- [ ] **P13.5 — Tests for memory**: History records both success/failure, failures archived not deleted, session summaries under 1k tokens, review cycle triggers correctly.
+- [x] **P13.1 — Execution history store** (`src/memory.py`): Log successful sequences as proven routes. Log failures alongside (archived, never deleted). Written at session end.
+- [x] **P13.2 — User profile store** (`src/memory.py`): Capture explicit preferences + observed patterns. Written on correction/override. Loaded at session start.
+- [x] **P13.3 — Session summary generator**: Produce ~1k token summary at session end. Clean, ready for next session start.
+- [x] **P13.4 — Review cycle**: After outcomes, classify → write memory → synthesize → session summary. For atlas: archive stale piece → draft replacement → cascade check.
+- [x] **P13.5 — Tests for memory**: History records both success/failure, failures archived not deleted, session summaries under 1k tokens, review cycle triggers correctly.
 
 ## Priority 14 — Integration & End-to-End
 
-- [ ] **P14.1 — End-to-end integration test**: Query → route → (mode-specific execution) → response. Cover all four modes.
-- [ ] **P14.2 — CLI polish** (`src/main.py`): Enhance CLI from P1.4 with streaming output, Mode D clarification UX, error display.
-- [ ] **P14.3 — Mypy + ruff passing**: Full type coverage, clean lint.
+- [x] **P14.1 — End-to-end integration test**: Query → route → (mode-specific execution) → response. Cover all four modes.
+- [x] **P14.2 — CLI polish** (`src/main.py`): Enhance CLI from P1.4 with streaming output, Mode D clarification UX, error display.
+- [x] **P14.3 — Mypy + ruff passing**: Full type coverage, clean lint.
 
 ---
 
