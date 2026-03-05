@@ -7,7 +7,7 @@ from langgraph.graph import END, StateGraph
 
 from src.atlas import Atlas
 from src.lib.contradiction import detect_contradictions
-from src.lib.models import Conclusion, SpawnTask
+from src.lib.models import Conclusion, Piece, PieceStatus, PieceType, SpawnTask
 from src.lib.piece_runner import LLMCallable, execute_piece
 from src.lib.state import OrchestratorState
 from src.router import classify_query, reroute_after_clarification
@@ -185,18 +185,56 @@ def merge_b(state: OrchestratorState) -> dict[str, Any]:
     return {"merged_response": " | ".join(parts) if parts else "All pieces failed."}
 
 
-def draft_c(state: OrchestratorState) -> dict[str, Any]:
+def draft_c(state: OrchestratorState, *, atlas: Atlas) -> dict[str, Any]:
     """Mode C (Cartographer): no matching piece found — halt and draft.
 
-    Does NOT improvise. Creates a draft description of what a piece would need.
+    Does NOT improvise. Creates a draft piece describing what would be needed,
+    saves it to the atlas with draft status for human review.
     """
     query = state["query"]
+    weak_matches = state.get("routing_decision")
+    matched_ids = (
+        [m.piece_id for m in weak_matches.matched_pieces]
+        if weak_matches and weak_matches.matched_pieces
+        else []
+    )
+
+    # Generate a draft piece ID from the query
+    draft_id = "draft_" + query[:40].lower().replace(" ", "_").strip("_")
+
+    # Build draft piece content
+    draft_content = f"""# Draft: {query}
+
+**Type:** forward
+**Status:** draft
+**Connections:** [{', '.join(matched_ids)}]
+
+## Scope
+This piece would handle: {query}
+
+## Notes
+- Auto-drafted by Mode C (Cartographer) — no matching piece found
+- Nearest existing pieces: {', '.join(matched_ids) if matched_ids else 'none'}
+- Requires human review before activation
+"""
+
+    draft_piece = Piece(
+        id=draft_id,
+        title=f"Draft: {query}",
+        type=PieceType.FORWARD,
+        status=PieceStatus.DRAFT,
+        connections=matched_ids,
+        content=draft_content,
+    )
+    atlas.add_piece(draft_piece)
+
     conclusion = Conclusion(
-        summary=f"No matching piece found for query: {query}",
+        summary=f"No matching piece found. Draft created: {draft_id}",
         status="escalated",
+        key_outputs={"draft_piece_id": draft_id},
         diagnostics=(
             f"Query '{query}' produced no confident matches. "
-            "A new piece may need to be created covering this domain."
+            f"Draft piece '{draft_id}' created for human review."
         ),
     )
     return {
@@ -244,7 +282,7 @@ def build_graph(
         "spawn_b", lambda s: spawn_b(s, atlas=atlas, llm_fn=llm_fn)
     )
     graph.add_node("merge_b", merge_b)
-    graph.add_node("draft_c", draft_c)
+    graph.add_node("draft_c", lambda s: draft_c(s, atlas=atlas))
     graph.add_node("clarify_d", clarify_d)
 
     graph.set_entry_point("route")

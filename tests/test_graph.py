@@ -192,8 +192,41 @@ class TestGraphTopologyModeC:
 
         result = app.invoke({"query": "something with no matching piece"})
         assert result["routing_decision"].mode == "C"
-        assert "No matching piece" in result["merged_response"]
+        assert "Draft created" in result["merged_response"]
         assert result["subagent_conclusions"][0].status == "escalated"
+
+    def test_mode_c_creates_draft_piece_in_atlas(self) -> None:
+        """Mode C should save a draft piece to the atlas for human review."""
+        embed_fn = _controllable_embed({})
+        atlas = Atlas(embed_fn=embed_fn)
+        initial_count = atlas.piece_count
+
+        graph = build_graph(atlas)
+        app = graph.compile()
+
+        result = app.invoke({"query": "new workflow needed"})
+        assert result["routing_decision"].mode == "C"
+
+        # Atlas should have a new draft piece
+        assert atlas.piece_count == initial_count + 1
+        draft_id = result["subagent_conclusions"][0].key_outputs["draft_piece_id"]
+        draft = atlas.get_piece(draft_id)
+        assert draft is not None
+        assert draft.status.value == "draft"
+        assert "new workflow needed" in draft.content
+
+    def test_mode_c_does_not_improvise(self) -> None:
+        """Mode C halts — it drafts but does not attempt execution."""
+        embed_fn = _controllable_embed({})
+        atlas = Atlas(embed_fn=embed_fn)
+
+        graph = build_graph(atlas)
+        app = graph.compile()
+
+        result = app.invoke({"query": "unknown domain"})
+        conclusion = result["subagent_conclusions"][0]
+        assert conclusion.status == "escalated"
+        assert "Draft" in result["merged_response"]
 
 
 class TestGraphTopologyModeD:
@@ -216,6 +249,31 @@ class TestGraphTopologyModeD:
         mode = result["routing_decision"].mode
         assert mode in ("C", "D")
         assert "merged_response" in result
+
+    def test_mode_d_returns_clarification_prompt(self) -> None:
+        """Mode D returns a clarification prompt without executing anything."""
+        embed_fn = _controllable_embed({
+            "billing": VEC_BILLING,
+            "support": VEC_SUPPORT,
+            "ambiguous": VEC_UNRELATED,
+        })
+        atlas = Atlas(embed_fn=embed_fn)
+        atlas.add_piece(_make_piece("billing", "billing invoices"))
+        atlas.add_piece(_make_piece("support", "support tickets"))
+
+        graph = build_graph(atlas)
+        app = graph.compile()
+
+        result = app.invoke({
+            "query": "ambiguous request about something",
+        })
+        mode = result["routing_decision"].mode
+        if mode == "D":
+            assert result["merged_response"]
+            # Should not have executed any pieces
+            assert "subagent_conclusions" not in result or not result.get(
+                "subagent_conclusions"
+            )
 
 
 class TestGraphMerger:

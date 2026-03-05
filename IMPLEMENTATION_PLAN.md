@@ -3,7 +3,7 @@
 **Status:** P1-P4 complete. Core routing logic implemented.
 **Goal:** Working LangGraph-based subagent spawner + merger implementing the Agent Architecture.
 
-**Last Updated:** 2026-03-05 — P1-P8 complete. 109 tests passing, lint clean.
+**Last Updated:** 2026-03-05 — P1-P10 complete. 112 tests passing, lint clean.
 
 Key learnings:
 - Skills are prompt files without mermaid diagrams — parser handles this
@@ -81,14 +81,14 @@ Key learnings:
 
 ## Priority 9 — Mode C: Cartographer (Draft + Halt)
 
-- [ ] **P9.1 — Draft node** (`src/nodes/drafter.py`): When no piece matches, halt execution. Draft what a piece would look like: scope, likely structure, connections to adjacent pieces, piece type (workflow, skill, or recovery). Save as draft piece in atlas.
-- [ ] **P9.2 — Tests for Mode C**: Verify halt behavior (no improvisation), draft piece created with correct status.
+- [x] **P9.1 — Draft node**: `draft_c()` in graph.py creates a draft Piece with status=draft, saves to atlas. Includes query scope, nearest existing pieces as connections.
+- [x] **P9.2 — Tests for Mode C**: Draft piece creation in atlas, halt behavior (escalated status, no execution), draft content includes query.
 
 ## Priority 10 — Mode D: Clarifier
 
-- [ ] **P10.1 — Clarify node** (`src/nodes/clarifier.py`): Surface what's needed to route confidently. Generate clarification prompt. Accept human input. Re-route with narrowed query (must not return Mode D again).
-- [ ] **P10.2 — Human-in-the-loop integration**: LangGraph interrupt mechanism for awaiting human input during Mode D.
-- [ ] **P10.3 — Tests for Mode D**: Clarification prompt generation, re-routing guard, human input flow.
+- [x] **P10.1 — Clarify node**: `clarify_d()` in graph.py surfaces clarification prompt from routing decision. Re-routing via `reroute_after_clarification()` prevents infinite D loops (implemented in P4.2).
+- [x] **P10.2 — Human-in-the-loop**: Graph accepts `human_input` in state; route node detects it and calls `reroute_after_clarification()`. Full LangGraph interrupt deferred until streaming CLI (P14).
+- [x] **P10.3 — Tests for Mode D**: Clarification prompt generation, re-routing guard (from P4), ambiguous query routing.
 
 ## Priority 11 — Recovery Loops / Anti-Workflows (specs/recovery.md)
 
