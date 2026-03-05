@@ -1,15 +1,17 @@
 # Implementation Plan — LangGraph Orchestrator
 
-**Status:** Greenfield — no source code, tests, or pyproject.toml exist yet.
+**Status:** P1-P4 complete. Core routing logic implemented.
 **Goal:** Working LangGraph-based subagent spawner + merger implementing the Agent Architecture.
 
-**Last Updated:** 2026-03-05 — P1-P3 complete. 40 tests passing, lint clean.
+**Last Updated:** 2026-03-05 — P1-P4 complete. 58 tests passing, lint clean.
 
 Key learnings:
 - Skills are prompt files without mermaid diagrams — parser handles this
 - Build backend: use `setuptools.build_meta` (not `setuptools.backends._legacy`)
 - Venv required: `python3 -m venv .venv && source .venv/bin/activate`
 - Default embed function is hash-based for testing; production needs OpenAI/sentence-transformer
+- Hash-based embeddings are NOT similarity-preserving — router tests need controllable embed functions with known vectors
+- In 1536-d space, random noise quickly dominates signals — use vector blending (not additive noise) for controlled cosine similarity in tests
 
 ---
 
@@ -39,13 +41,13 @@ Key learnings:
 
 ## Priority 4 — Router: Mode Classification (specs/routing.md)
 
-- [ ] **P4.1 — Router module** (`src/router.py`): Function `classify_query(query, atlas) -> RoutingDecision`. Uses atlas search scores against configurable thresholds to determine mode A/B/C/D.
+- [x] **P4.1 — Router module** (`src/router.py`): Function `classify_query(query, atlas) -> RoutingDecision`. Uses atlas search scores against configurable thresholds to determine mode A/B/C/D.
   - Single match above high threshold → Mode A (piece_id returned)
   - Multiple matches above moderate threshold → Mode B (piece_ids returned)
   - No match above moderate threshold → Mode C
   - Multiple weak matches across unrelated domains → Mode D
-- [ ] **P4.2 — Mode D re-routing**: After human clarification, re-classify with narrowed query. Enforce non-D result (prevent infinite clarification loops).
-- [ ] **P4.3 — Tests for router**: Verify classification into all four modes, threshold configurability, Mode D re-routing guard.
+- [x] **P4.2 — Mode D re-routing**: `reroute_after_clarification()` re-classifies with narrowed query. Forces Mode C if re-classification would return D again.
+- [x] **P4.3 — Tests for router**: 18 tests covering all four modes, threshold configurability, Mode D re-routing guard, edge cases.
 
 ## Priority 5 — LangGraph State & Graph Topology
 
