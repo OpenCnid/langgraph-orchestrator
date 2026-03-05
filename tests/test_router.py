@@ -211,22 +211,22 @@ class TestModeDClassification:
 
     def test_multiple_weak_matches_returns_mode_d(self) -> None:
         """Multiple matches below moderate → ambiguous → Mode D."""
-        # Create a query vector that partially matches multiple pieces
+        # Create a query vector that partially matches two pieces
         # (blended so cosine sim is above noise floor but below moderate).
-        blend = np.array(VEC_BILLING) + np.array(VEC_HR) + np.array(VEC_OPS)
+        # 2-way blend produces ~0.708 similarity — above noise floor (0.594)
+        # but below the 0.99 moderate threshold.
+        blend = np.array(VEC_BILLING) + np.array(VEC_HR)
         blend = blend / np.linalg.norm(blend)
         vec_ambiguous = blend.tolist()
 
         embed_fn = _controllable_embed({
             "finance": VEC_BILLING,
             "hr": VEC_HR,
-            "ops": VEC_OPS,
             "help": vec_ambiguous,
         })
         atlas = Atlas(embed_fn=embed_fn)
         atlas.add_piece(_make_piece("finance", "finance quarterly revenue"))
         atlas.add_piece(_make_piece("hr", "hr employee onboarding"))
-        atlas.add_piece(_make_piece("ops", "ops staging deploy"))
 
         result = classify_query(
             "help me with something",

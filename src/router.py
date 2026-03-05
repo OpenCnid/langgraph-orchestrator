@@ -88,8 +88,8 @@ def classify_query(
 
     # Below moderate threshold — distinguish C vs D
     # Filter out noise: scores near or below zero are not real matches.
-    # Use 0.125 as absolute floor — anything below is embedding noise.
-    noise_floor = 0.125
+    # Use moderate * 0.6 as floor — anything below is embedding noise.
+    noise_floor = moderate * 0.6
     plausible_weak = [m for m in weak_matches if m.score >= noise_floor]
 
     # Mode D: multiple plausible-but-weak matches → ambiguous, ask human

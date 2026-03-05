@@ -182,7 +182,7 @@ class TestAtlasLoadFromDirectory:
     def test_load_sample_pieces(self) -> None:
         atlas = Atlas(embed_fn=_deterministic_embed)
         count = atlas.load_from_directory("pieces")
-        assert count == 3  # forward, recovery, skill samples
+        assert count == 12  # forward, recovery, and skill pieces
         assert atlas.get_piece("sample_lookup") is not None
         assert atlas.get_piece("sample_not_found") is not None
         assert atlas.get_piece("sample_interpretation") is not None
