@@ -9,8 +9,10 @@ class Settings(BaseSettings):
     model_config = {"env_prefix": "ORCH_", "env_file": ".env", "extra": "ignore"}
 
     # Confidence thresholds for routing
-    confidence_high: float = 0.85
-    confidence_moderate: float = 0.60
+    # Calibrated for text-embedding-3-small cosine similarity scores.
+    # Hash-based test embeddings use overrides in test fixtures.
+    confidence_high: float = 0.40
+    confidence_moderate: float = 0.25
 
     # Retry limits
     retry_limit: int = 3

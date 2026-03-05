@@ -8,8 +8,8 @@ from src.lib.config import Settings
 class TestSettings:
     def test_defaults(self) -> None:
         s = Settings()
-        assert s.confidence_high == 0.85
-        assert s.confidence_moderate == 0.60
+        assert s.confidence_high == 0.40
+        assert s.confidence_moderate == 0.25
         assert s.retry_limit == 3
         assert s.compaction_trigger == 6000
         assert s.embedding_model == "text-embedding-3-small"

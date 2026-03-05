@@ -211,11 +211,17 @@ class TestModeDClassification:
 
     def test_multiple_weak_matches_returns_mode_d(self) -> None:
         """Multiple matches below moderate → ambiguous → Mode D."""
+        # Create a query vector that partially matches multiple pieces
+        # (blended so cosine sim is above noise floor but below moderate).
+        blend = np.array(VEC_BILLING) + np.array(VEC_HR) + np.array(VEC_OPS)
+        blend = blend / np.linalg.norm(blend)
+        vec_ambiguous = blend.tolist()
+
         embed_fn = _controllable_embed({
             "finance": VEC_BILLING,
             "hr": VEC_HR,
             "ops": VEC_OPS,
-            "help": VEC_UNRELATED,
+            "help": vec_ambiguous,
         })
         atlas = Atlas(embed_fn=embed_fn)
         atlas.add_piece(_make_piece("finance", "finance quarterly revenue"))
@@ -233,10 +239,15 @@ class TestModeDClassification:
         assert len(result.matched_pieces) >= 2
 
     def test_mode_d_includes_clarification_prompt(self) -> None:
+        # Blend query vector to partially match both pieces
+        blend = np.array(VEC_BILLING) + np.array(VEC_SUPPORT)
+        blend = blend / np.linalg.norm(blend)
+        vec_partial = blend.tolist()
+
         embed_fn = _controllable_embed({
             "billing": VEC_BILLING,
             "support": VEC_SUPPORT,
-            "customer": VEC_UNRELATED,
+            "customer": vec_partial,
         })
         atlas = Atlas(embed_fn=embed_fn)
         atlas.add_piece(_make_piece("billing", "billing invoices"))

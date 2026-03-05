@@ -15,15 +15,38 @@ logger = logging.getLogger(__name__)
 
 
 def _make_embedding_text(piece: Piece) -> str:
-    """Build the text to embed for a piece — compact identifier + title + prose."""
+    """Build the text to embed for a piece — title + first prose paragraph.
+
+    Full mermaid diagrams and markdown structure dilute semantic signal.
+    We embed a focused summary: title + opening description.
+    """
     parts: list[str] = []
-    if piece.compact_identifier:
-        parts.append(piece.compact_identifier)
     if piece.title:
         parts.append(piece.title)
-    # Use full content as prose description for richer embeddings
+    # Extract first paragraph of prose (skip mermaid blocks and metadata)
     if piece.content:
-        parts.append(piece.content)
+        lines = piece.content.split("\n")
+        in_code_block = False
+        prose_lines: list[str] = []
+        for line in lines:
+            if line.strip().startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            if in_code_block:
+                continue
+            stripped = line.strip()
+            # Skip metadata lines and headers
+            if stripped.startswith("**") and ":" in stripped:
+                continue
+            if stripped.startswith("#"):
+                continue
+            if stripped:
+                prose_lines.append(stripped)
+                # Take first 2 prose sentences for a focused embedding
+                if len(prose_lines) >= 2:
+                    break
+        if prose_lines:
+            parts.append(" ".join(prose_lines))
     return " ".join(parts)
 
 
@@ -142,10 +165,10 @@ class Atlas:
 
 
 
-def _default_embed_fn(text: str) -> list[float]:
+def _hash_embed_fn(text: str) -> list[float]:
     """Simple deterministic embedding for testing — hash-based.
 
-    In production, replace with OpenAI/sentence-transformer embeddings.
+    NOT similarity-preserving. Use only for unit tests with controllable vectors.
     """
     import hashlib
 
@@ -158,3 +181,27 @@ def _default_embed_fn(text: str) -> list[float]:
         val = ((h[byte_idx] >> bit_idx) & 1) * 2.0 - 1.0  # -1.0 or 1.0
         vec.append(val)
     return vec
+
+
+def _openai_embed_fn(text: str) -> list[float]:
+    """Embed text using OpenAI's text-embedding-3-small model."""
+    import openai
+
+    client = openai.OpenAI()
+    response = client.embeddings.create(
+        model=settings.embedding_model,
+        input=text,
+    )
+    return response.data[0].embedding
+
+
+def _default_embed_fn(text: str) -> list[float]:
+    """Select embedding function based on environment.
+
+    Uses OpenAI embeddings when OPENAI_API_KEY is set, falls back to hash-based.
+    """
+    import os
+
+    if os.environ.get("OPENAI_API_KEY"):
+        return _openai_embed_fn(text)
+    return _hash_embed_fn(text)

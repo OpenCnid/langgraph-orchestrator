@@ -87,19 +87,24 @@ def classify_query(
         )
 
     # Below moderate threshold — distinguish C vs D
-    # Mode D: multiple weak matches exist → ambiguous, ask human
-    if len(weak_matches) >= 2:
+    # Filter out noise: scores near or below zero are not real matches.
+    # Use 0.125 as absolute floor — anything below is embedding noise.
+    noise_floor = 0.125
+    plausible_weak = [m for m in weak_matches if m.score >= noise_floor]
+
+    # Mode D: multiple plausible-but-weak matches → ambiguous, ask human
+    if len(plausible_weak) >= 2:
         return RoutingDecision(
             mode="D",
-            matched_pieces=weak_matches,
+            matched_pieces=plausible_weak,
             confidence_scores=confidence_scores,
-            clarification_prompt=_generate_clarification_prompt(query, weak_matches),
+            clarification_prompt=_generate_clarification_prompt(query, plausible_weak),
         )
 
     # Mode C: no meaningful matches — nothing in the atlas for this
     return RoutingDecision(
         mode="C",
-        matched_pieces=weak_matches,
+        matched_pieces=plausible_weak,
         confidence_scores=confidence_scores,
     )
 
