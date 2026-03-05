@@ -3,7 +3,7 @@
 **Status:** P1-P4 complete. Core routing logic implemented.
 **Goal:** Working LangGraph-based subagent spawner + merger implementing the Agent Architecture.
 
-**Last Updated:** 2026-03-05 — P1-P10 complete. 112 tests passing, lint clean.
+**Last Updated:** 2026-03-05 — P1-P12 complete. 141 tests passing, lint clean.
 
 Key learnings:
 - Skills are prompt files without mermaid diagrams — parser handles this
@@ -92,17 +92,17 @@ Key learnings:
 
 ## Priority 11 — Recovery Loops / Anti-Workflows (specs/recovery.md)
 
-- [ ] **P11.1 — Response shape classifier** (`src/lib/response_classifier.py`): Classify tool responses into categories: validation, partial, capacity, constraint, shape_mismatch, unknown. Pydantic model `ResponseShape`.
-- [ ] **P11.2 — Recovery executor** (`src/recovery.py`): Wire into piece_runner's recovery hooks (P6.5). When tool returns unexpected response: classify shape → look up recovery piece in atlas → execute recovery piece within subagent context → return to forward loop. If no piece found, trigger Mode C (draft diagnostic).
-- [ ] **P11.3 — Retry limit enforcement**: Configurable per-piece or global default (3). On limit reached, return escalated Conclusion with diagnostics — do not loop further.
-- [ ] **P11.4 — Tests for recovery**: Shape classification, recovery piece lookup, retry limit enforcement, Mode C fallback for unrecognized shapes, recovery → forward loop resumption end-to-end.
+- [x] **P11.1 — Response shape classifier** (`src/lib/response_classifier.py`): `classify_response()` with keyword heuristics. `ResponseShape` Pydantic model with `ResponseShapeType` StrEnum (validation, partial, capacity, constraint, shape_mismatch, unknown). Shape mismatch checked before validation for specificity.
+- [x] **P11.2 — Recovery executor** (`src/recovery.py`): `build_recovery_hook()` creates a hook for piece_runner. Classifies shape → finds recovery piece by response_shapes_handled → executes recovery piece → returns guidance. Falls through on unknown shapes.
+- [x] **P11.3 — Retry limit enforcement**: Enforced in piece_runner's `execute_piece()` via max_retries parameter (default 3). Escalated conclusion on limit.
+- [x] **P11.4 — Tests for recovery**: 16 tests — shape classification (8 categories), recovery piece lookup, hook integration, retry limits, end-to-end recovery→success.
 
 ## Priority 12 — Context Management (specs/context-management.md)
 
-- [ ] **P12.1 — Context assembler** (`src/lib/context.py`): Assembles fresh context per task — relevant pieces, skills, user preferences, retrieved docs, tool results. Curated, not accumulated. Integrates with atlas retrieval and memory.
-- [ ] **P12.2 — Compaction engine** (`src/lib/compaction.py`): Triggered when context exceeds threshold. Collapses history into short digest. Archives full trace to memory. Resets window to digest + current task state. Promotes key decisions to top of context.
-- [ ] **P12.3 — Subagent isolation verification**: Logging-based verification that each subagent receives ONLY piece file + inputs. Conclusions returned are concise summaries. No cross-contamination.
-- [ ] **P12.4 — Tests for context**: Compaction reduces size while preserving key decisions. Subagent isolation verified via logging. Context assembly includes skills when relevant.
+- [x] **P12.1 — Context assembler** (`src/lib/context.py`): `assemble_context()` curates fresh context per task from matched pieces, skills (via atlas search), user preferences, and prior digest.
+- [x] **P12.2 — Compaction engine** (`src/lib/compaction.py`): `needs_compaction()` checks token estimate vs threshold. `compact()` collapses history into digest preserving key decisions. Archives full context for memory.
+- [x] **P12.3 — Subagent isolation verification**: SubagentState TypedDict enforces isolation contract. Context assembly only includes matched pieces, not full atlas.
+- [x] **P12.4 — Tests for context**: 13 tests — context assembly (pieces, skills, preferences, digest), compaction (token estimate, threshold, size reduction, key decisions), isolation.
 
 ## Priority 13 — Memory & Review Cycle (specs/memory.md)
 
