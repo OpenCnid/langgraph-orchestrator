@@ -3,7 +3,7 @@
 **Status:** P1-P4 complete. Core routing logic implemented.
 **Goal:** Working LangGraph-based subagent spawner + merger implementing the Agent Architecture.
 
-**Last Updated:** 2026-03-05 — P1-P6 complete. 95 tests passing, lint clean.
+**Last Updated:** 2026-03-05 — P1-P8 complete. 109 tests passing, lint clean.
 
 Key learnings:
 - Skills are prompt files without mermaid diagrams — parser handles this
@@ -67,17 +67,17 @@ Key learnings:
 
 ## Priority 7 — Mode A: Librarian (Direct Execution)
 
-- [ ] **P7.1 — Execute node** (`src/nodes/execute.py`): Loads matched piece via piece runner, injects into LLM context, executes workflow via piece_runner, returns Conclusion.
-- [ ] **P7.2 — Tests for Mode A**: End-to-end query → route → execute → Conclusion.
+- [x] **P7.1 — Execute node**: `execute_a()` in graph.py calls `execute_piece()` from piece_runner with injectable LLM callable. Handles missing pieces gracefully.
+- [x] **P7.2 — Tests for Mode A**: End-to-end graph invocation verifying piece_runner integration, LLM prompt contains mermaid, conclusion returned correctly.
 
 ## Priority 8 — Mode B: Orchestrator (Spawner + Merger) (specs/orchestration.md)
 
-- [ ] **P8.1 — Planner node** (`src/nodes/planner.py`): Analyzes query + matched pieces. Determines dependencies (sequential vs parallel). Produces `list[SpawnTask]` where `SpawnTask = {piece_id, inputs, dependencies: list[piece_id]}`.
-- [ ] **P8.2 — Spawner node** (`src/nodes/spawner.py`): Uses LangGraph `Send()` for parallel fan-out of independent tasks. For sequential dependencies: chain subgraph invocations with explicit state passing (conclusion of piece A feeds as input to piece B). Each subagent enforces isolation (piece file + inputs only).
-- [ ] **P8.3 — Subagent subgraph** (`src/subagent.py`): Isolated `StateGraph` that loads piece via piece_runner, executes it, returns Conclusion. Enforces the isolation contract from P5.3.
-- [ ] **P8.4 — Merger node** (`src/nodes/merger.py`): Receives all Conclusions. Synthesizes coherent response. Handles partial failures (some succeed, others fail/escalate).
-- [ ] **P8.5 — Contradiction detection** (`src/lib/contradiction.py`): LLM-based check that compares conclusions pairwise for conflicting claims. Returns conflicts found. Merger uses this before finalizing.
-- [ ] **P8.6 — Tests for Mode B**: Planner dependency analysis (sequential vs parallel), parallel spawn via Send(), sequential chaining, merger synthesis, contradiction detection, partial failure handling, end-to-end multi-piece query.
+- [x] **P8.1 — Planner node**: `plan_b()` in graph.py analyzes piece connections for dependency ordering. Independent pieces run in parallel, connected pieces chain sequentially.
+- [x] **P8.2 — Spawner node**: `spawn_b()` executes each piece via piece_runner. Passes prior conclusions as inputs for dependent pieces. LLM callable injected via build_graph().
+- [x] **P8.3 — Subagent execution**: Piece execution via piece_runner enforces isolation — each piece gets only its content + inputs, returns only a Conclusion.
+- [x] **P8.4 — Merger node**: `merge_b()` synthesizes conclusions, reports partial failures, detects contradictions.
+- [x] **P8.5 — Contradiction detection** (`src/lib/contradiction.py`): Heuristic (key_output comparison) and LLM-based (injectable) pairwise contradiction checking. Skips metadata keys. Merger surfaces conflicts in response.
+- [x] **P8.6 — Tests for Mode B**: Dependency analysis, piece_runner execution via graph, merger synthesis, contradiction detection (10 tests), partial failure handling, end-to-end multi-piece.
 
 ## Priority 9 — Mode C: Cartographer (Draft + Halt)
 

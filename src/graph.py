@@ -6,7 +6,9 @@ from typing import Any, Literal
 from langgraph.graph import END, StateGraph
 
 from src.atlas import Atlas
+from src.lib.contradiction import detect_contradictions
 from src.lib.models import Conclusion, SpawnTask
+from src.lib.piece_runner import LLMCallable, execute_piece
 from src.lib.state import OrchestratorState
 from src.router import classify_query, reroute_after_clarification
 
@@ -39,11 +41,13 @@ def route_condition(
     }[mode]
 
 
-def execute_a(state: OrchestratorState, *, atlas: Atlas) -> dict[str, Any]:
-    """Mode A (Librarian): execute a single matched piece directly.
-
-    Full piece execution via piece_runner is wired in P6/P7.
-    """
+def execute_a(
+    state: OrchestratorState,
+    *,
+    atlas: Atlas,
+    llm_fn: LLMCallable,
+) -> dict[str, Any]:
+    """Mode A (Librarian): execute a single matched piece directly via piece_runner."""
     decision = state["routing_decision"]
     piece_match = decision.matched_pieces[0]
     piece = atlas.get_piece(piece_match.piece_id)
@@ -55,11 +59,11 @@ def execute_a(state: OrchestratorState, *, atlas: Atlas) -> dict[str, Any]:
             diagnostics=f"Piece ID {piece_match.piece_id} was matched but not found",
         )
     else:
-        # P7 will wire full piece execution here via piece_runner
-        conclusion = Conclusion(
-            summary=f"Executed piece: {piece.title}",
-            status="success",
-            key_outputs={"piece_id": piece.id, "piece_type": str(piece.type)},
+        conclusion = execute_piece(
+            piece,
+            {"query": state["query"]},
+            llm_fn=llm_fn,
+            atlas=atlas,
         )
 
     return {
@@ -71,53 +75,78 @@ def execute_a(state: OrchestratorState, *, atlas: Atlas) -> dict[str, Any]:
 def plan_b(state: OrchestratorState, *, atlas: Atlas) -> dict[str, Any]:
     """Mode B (Orchestrator): plan multi-piece execution.
 
-    Analyzes matched pieces and determines dependencies.
-    Full planner logic in P8.
+    Analyzes matched pieces, determines dependencies (sequential vs parallel).
+    Pieces with shared connections are sequential; independent pieces are parallel.
     """
     decision = state["routing_decision"]
     spawn_plan: list[SpawnTask] = []
 
+    # Build piece connection map for dependency analysis
+    piece_ids = [m.piece_id for m in decision.matched_pieces]
     for match in decision.matched_pieces:
         piece = atlas.get_piece(match.piece_id)
         if piece is None:
             continue
+
+        # Check if this piece depends on other matched pieces via connections
+        deps = [
+            conn for conn in piece.connections
+            if conn in piece_ids and conn != match.piece_id
+        ]
+
         spawn_plan.append(
             SpawnTask(
                 piece_id=match.piece_id,
                 inputs={"query": state["query"]},
+                dependencies=deps,
             )
         )
 
     return {"spawn_plan": spawn_plan}
 
 
-def spawn_b(state: OrchestratorState, *, atlas: Atlas) -> dict[str, Any]:
-    """Mode B: spawn subagents per piece and collect conclusions.
+def spawn_b(
+    state: OrchestratorState,
+    *,
+    atlas: Atlas,
+    llm_fn: LLMCallable,
+) -> dict[str, Any]:
+    """Mode B: execute each piece via piece_runner and collect conclusions.
 
-    P8 will use LangGraph Send() for true parallel fan-out.
+    Executes pieces sequentially, passing prior conclusions as context
+    for dependent pieces.
     """
     conclusions: list[Conclusion] = []
+    conclusion_map: dict[str, Conclusion] = {}
 
     for task in state.get("spawn_plan", []):
         piece = atlas.get_piece(task.piece_id)
         if piece is None:
-            conclusions.append(
-                Conclusion(
-                    summary=f"Piece {task.piece_id} not found",
-                    status="failed",
-                    diagnostics=f"Piece {task.piece_id} missing from atlas",
-                )
+            conclusion = Conclusion(
+                summary=f"Piece {task.piece_id} not found",
+                status="failed",
+                diagnostics=f"Piece {task.piece_id} missing from atlas",
             )
+            conclusions.append(conclusion)
+            conclusion_map[task.piece_id] = conclusion
             continue
 
-        # P8 will execute each piece in an isolated subgraph
-        conclusions.append(
-            Conclusion(
-                summary=f"Executed piece: {piece.title}",
-                status="success",
-                key_outputs={"piece_id": piece.id},
-            )
+        # Build inputs — include prior conclusions from dependencies
+        inputs = dict(task.inputs)
+        for dep_id in task.dependencies:
+            if dep_id in conclusion_map:
+                dep_conclusion = conclusion_map[dep_id]
+                inputs[f"dep_{dep_id}_summary"] = dep_conclusion.summary
+                inputs[f"dep_{dep_id}_outputs"] = dep_conclusion.key_outputs
+
+        conclusion = execute_piece(
+            piece,
+            inputs,
+            llm_fn=llm_fn,
+            atlas=atlas,
         )
+        conclusions.append(conclusion)
+        conclusion_map[task.piece_id] = conclusion
 
     return {"subagent_conclusions": conclusions}
 
@@ -125,7 +154,7 @@ def spawn_b(state: OrchestratorState, *, atlas: Atlas) -> dict[str, Any]:
 def merge_b(state: OrchestratorState) -> dict[str, Any]:
     """Mode B: merge all subagent conclusions into a coherent response.
 
-    P8 will add contradiction detection and partial failure handling.
+    Checks for contradictions between conclusions before finalizing.
     """
     conclusions = state.get("subagent_conclusions", [])
 
@@ -135,9 +164,16 @@ def merge_b(state: OrchestratorState) -> dict[str, Any]:
     failed = [c for c in conclusions if c.status in ("failed", "escalated")]
     succeeded = [c for c in conclusions if c.status in ("success", "partial")]
 
+    # Check for contradictions among successful conclusions
+    contradictions = detect_contradictions(succeeded)
+
     parts: list[str] = []
     for c in succeeded:
         parts.append(c.summary)
+
+    if contradictions:
+        conflict_descriptions = "; ".join(c["description"] for c in contradictions)
+        parts.append(f"[CONFLICTS DETECTED: {conflict_descriptions}]")
 
     if failed:
         parts.append(
@@ -153,7 +189,6 @@ def draft_c(state: OrchestratorState) -> dict[str, Any]:
     """Mode C (Cartographer): no matching piece found — halt and draft.
 
     Does NOT improvise. Creates a draft description of what a piece would need.
-    P9 will save the draft to atlas.
     """
     query = state["query"]
     conclusion = Conclusion(
@@ -171,42 +206,49 @@ def draft_c(state: OrchestratorState) -> dict[str, Any]:
 
 
 def clarify_d(state: OrchestratorState) -> dict[str, Any]:
-    """Mode D (Clarifier): query is ambiguous — request human clarification.
-
-    Returns the clarification prompt. P10 will wire LangGraph interrupt
-    for actual human-in-the-loop.
-    """
+    """Mode D (Clarifier): query is ambiguous — request human clarification."""
     decision = state["routing_decision"]
     prompt = decision.clarification_prompt or (
         "Your query is ambiguous. Could you provide more detail?"
     )
     return {
         "merged_response": prompt,
-        "human_input": None,  # awaiting human response
+        "human_input": None,
     }
 
 
-def build_graph(atlas: Atlas) -> StateGraph:
+def build_graph(
+    atlas: Atlas,
+    llm_fn: LLMCallable | None = None,
+) -> StateGraph:
     """Build the orchestrator StateGraph with mode-based routing.
 
-    The atlas is injected via closure so nodes can access it without
-    it being in the state (it's infrastructure, not workflow data).
+    Args:
+        atlas: Piece registry for retrieval and lookup
+        llm_fn: LLM callable for piece execution. If None, uses a default
+                 that returns the piece title (for testing graph topology only).
     """
+    if llm_fn is None:
+        def llm_fn(system: str, user: str) -> str:  # type: ignore[misc]
+            return '{"summary": "Executed (no LLM configured)", "status": "success"}'
+
     graph = StateGraph(OrchestratorState)
 
-    # Bind atlas to nodes that need it
+    # Bind dependencies to nodes via closures
     graph.add_node("route", lambda s: route(s, atlas=atlas))
-    graph.add_node("execute_a", lambda s: execute_a(s, atlas=atlas))
+    graph.add_node(
+        "execute_a", lambda s: execute_a(s, atlas=atlas, llm_fn=llm_fn)
+    )
     graph.add_node("plan_b", lambda s: plan_b(s, atlas=atlas))
-    graph.add_node("spawn_b", lambda s: spawn_b(s, atlas=atlas))
+    graph.add_node(
+        "spawn_b", lambda s: spawn_b(s, atlas=atlas, llm_fn=llm_fn)
+    )
     graph.add_node("merge_b", merge_b)
     graph.add_node("draft_c", draft_c)
     graph.add_node("clarify_d", clarify_d)
 
-    # Entry point
     graph.set_entry_point("route")
 
-    # Conditional routing from route node
     graph.add_conditional_edges(
         "route",
         route_condition,
@@ -218,18 +260,11 @@ def build_graph(atlas: Atlas) -> StateGraph:
         },
     )
 
-    # Mode A: execute → end
     graph.add_edge("execute_a", END)
-
-    # Mode B: plan → spawn → merge → end
     graph.add_edge("plan_b", "spawn_b")
     graph.add_edge("spawn_b", "merge_b")
     graph.add_edge("merge_b", END)
-
-    # Mode C: draft → end
     graph.add_edge("draft_c", END)
-
-    # Mode D: clarify → end (human provides input, then re-invoked)
     graph.add_edge("clarify_d", END)
 
     return graph
