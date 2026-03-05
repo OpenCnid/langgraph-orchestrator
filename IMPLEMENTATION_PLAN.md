@@ -3,7 +3,7 @@
 **Status:** P1-P4 complete. Core routing logic implemented.
 **Goal:** Working LangGraph-based subagent spawner + merger implementing the Agent Architecture.
 
-**Last Updated:** 2026-03-05 — P1-P4 complete. 58 tests passing, lint clean.
+**Last Updated:** 2026-03-05 — P1-P5 complete. 66 tests passing, lint clean.
 
 Key learnings:
 - Skills are prompt files without mermaid diagrams — parser handles this
@@ -51,10 +51,10 @@ Key learnings:
 
 ## Priority 5 — LangGraph State & Graph Topology
 
-- [ ] **P5.1 — State schema** (`src/lib/state.py`): TypedDict `OrchestratorState` with fields: `query: str`, `routing_decision: RoutingDecision`, `spawn_plan: list[SpawnTask]`, `subagent_conclusions: list[Conclusion]`, `merged_response: str`, `context_digest: str`, `memory_log: list`, `human_input: str | None`.
-- [ ] **P5.2 — Main graph** (`src/graph.py`): LangGraph `StateGraph` with nodes: `route`, `execute_a` (Mode A), `plan_b` (Mode B planner), `spawn_b` (Mode B spawner via Send()), `merge_b` (Mode B merger), `draft_c` (Mode C), `clarify_d` (Mode D). Conditional edges from `route` based on mode.
-- [ ] **P5.3 — Subagent isolation contract**: Define the boundary — subagents receive ONLY piece file + inputs, return ONLY a Conclusion. This contract must be enforced from the start in P7.3, not deferred.
-- [ ] **P5.4 — Tests for graph topology**: Verify routing dispatches to correct node for each mode.
+- [x] **P5.1 — State schema** (`src/lib/state.py`): `OrchestratorState` (TypedDict, total=False) and `SubagentState` for isolation. All fields from spec implemented.
+- [x] **P5.2 — Main graph** (`src/graph.py`): `build_graph(atlas)` creates StateGraph with route → conditional edges → mode nodes. Atlas injected via closure. Mode B flows through plan → spawn → merge chain.
+- [x] **P5.3 — Subagent isolation contract**: `SubagentState` TypedDict enforces boundary — only piece_id, piece_content, inputs, conclusion. Tested via annotation assertions.
+- [x] **P5.4 — Tests for graph topology**: 8 tests — end-to-end invocation for each mode, spawn plan validation, merger synthesis, isolation contract verification.
 
 ## Priority 6 — Piece Execution Engine (specs/piece-execution.md)
 
