@@ -3,7 +3,7 @@
 **Status:** P1-P4 complete. Core routing logic implemented.
 **Goal:** Working LangGraph-based subagent spawner + merger implementing the Agent Architecture.
 
-**Last Updated:** 2026-03-05 — P1-P5 complete. 66 tests passing, lint clean.
+**Last Updated:** 2026-03-05 — P1-P6 complete. 95 tests passing, lint clean.
 
 Key learnings:
 - Skills are prompt files without mermaid diagrams — parser handles this
@@ -58,12 +58,12 @@ Key learnings:
 
 ## Priority 6 — Piece Execution Engine (specs/piece-execution.md)
 
-- [ ] **P6.1 — Piece loader** (`src/lib/piece_runner.py`): Parse piece markdown into components: front matter/metadata, mermaid diagram, prose context. Validate active status. Reject invalid pieces.
-- [ ] **P6.2 — LLM-based workflow interpreter** (`src/lib/piece_runner.py`): Inject piece content into LLM context. LLM interprets the mermaid diagram as structured instructions, identifies nodes and edges, follows the workflow step by step. Returns a Conclusion.
-- [ ] **P6.3 — Execution state**: Per-execution state tracking — node_outputs, current_node, execution_trace, error_state. Fully isolated per execution.
-- [ ] **P6.4 — Skill loading**: When a workflow node delegates a decision to the LLM, load the relevant skill(s) from the atlas into context for that decision. Unload after the decision (scoped injection).
-- [ ] **P6.5 — Recovery hook stubs**: Define entry points in the execution flow where recovery can intercept (post-tool-response, pre-conclusion). Stubs only — full recovery in P10.
-- [ ] **P6.6 — Tests for piece execution**: Piece loading/validation, LLM interpretation of sample workflow, conclusion output contract, skill loading for LLM-bridged nodes.
+- [x] **P6.1 — Piece loader** (`src/lib/piece_runner.py`): `validate_piece()` enforces active status, mermaid requirement. `load_piece_components()` extracts mermaid, prose, metadata.
+- [x] **P6.2 — LLM-based workflow interpreter**: `execute_piece()` takes injectable `LLMCallable(system, user) -> str`. Builds system prompt with piece content + skills, parses JSON or plain-text conclusions.
+- [x] **P6.3 — Execution state**: `ExecutionState` dataclass with node_outputs, current_node, execution_trace, error_state, inputs, skills_loaded. Fully isolated per execution.
+- [x] **P6.4 — Skill loading**: `load_skills_for_decision()` loads connected skills from atlas by connection IDs, falls back to similarity search. Skills are scoped to the execution prompt.
+- [x] **P6.5 — Recovery hooks**: `RecoveryHook` callable type. `execute_piece()` calls hook on failed/escalated conclusions, retries with recovery guidance. Retry limit enforced.
+- [x] **P6.6 — Tests for piece execution**: 29 tests — validation, loading, execution (success/fail/partial/exception), conclusion contract, skill loading, recovery hooks with retries.
 
 ## Priority 7 — Mode A: Librarian (Direct Execution)
 
