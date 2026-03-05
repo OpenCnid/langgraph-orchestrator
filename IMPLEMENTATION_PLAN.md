@@ -3,31 +3,39 @@
 **Status:** Greenfield — no source code, tests, or pyproject.toml exist yet.
 **Goal:** Working LangGraph-based subagent spawner + merger implementing the Agent Architecture.
 
+**Last Updated:** 2026-03-05 — P1-P3 complete. 40 tests passing, lint clean.
+
+Key learnings:
+- Skills are prompt files without mermaid diagrams — parser handles this
+- Build backend: use `setuptools.build_meta` (not `setuptools.backends._legacy`)
+- Venv required: `python3 -m venv .venv && source .venv/bin/activate`
+- Default embed function is hash-based for testing; production needs OpenAI/sentence-transformer
+
 ---
 
 ## Priority 1 — Project Scaffolding
 
-- [ ] **P1.1 — pyproject.toml + dependencies**: Python 3.11+, langgraph, langchain-core, langchain-openai (or langchain-anthropic), faiss-cpu (or chromadb), pydantic. Dev deps: pytest, pytest-asyncio, mypy, ruff. Package name: `langgraph_orchestrator`. Editable install via `pip install -e ".[dev]"`.
-- [ ] **P1.2 — Directory structure**: Create `src/`, `src/lib/`, `src/nodes/`, `tests/`, `pieces/forward/`, `pieces/recovery/`, `pieces/skills/`. Empty `__init__.py` files where needed.
-- [ ] **P1.3 — Configuration module** (`src/lib/config.py`): Pydantic settings for confidence thresholds (high, moderate), retry limits, compaction trigger, embedding model name, LLM model name. Loaded from env vars or `.env`.
-- [ ] **P1.4 — Minimal CLI runner** (`src/main.py`): Bare-bones CLI that accepts a query and runs the graph. Enables manual testing from P1 onward; full CLI polish deferred to P13.
+- [x] **P1.1 — pyproject.toml + dependencies**: Python 3.11+, langgraph, langchain-core, langchain-openai (or langchain-anthropic), faiss-cpu (or chromadb), pydantic. Dev deps: pytest, pytest-asyncio, mypy, ruff. Package name: `langgraph_orchestrator`. Editable install via `pip install -e ".[dev]"`.
+- [x] **P1.2 — Directory structure**: Create `src/`, `src/lib/`, `src/nodes/`, `tests/`, `pieces/forward/`, `pieces/recovery/`, `pieces/skills/`. Empty `__init__.py` files where needed.
+- [x] **P1.3 — Configuration module** (`src/lib/config.py`): Pydantic settings for confidence thresholds (high, moderate), retry limits, compaction trigger, embedding model name, LLM model name. Loaded from env vars or `.env`.
+- [x] **P1.4 — Minimal CLI runner** (`src/main.py`): Bare-bones CLI that accepts a query and runs the graph. Enables manual testing from P1 onward; full CLI polish deferred to P13.
 
 ## Priority 2 — Data Models & Piece Format (specs/atlas.md, specs/skills.md)
 
-- [ ] **P2.1 — Piece data model** (`src/lib/models.py`): Pydantic models for `Piece` (id, compact_identifier, title, type: forward|recovery|skill, status: active|archived|draft, connections: list of piece IDs, response_shapes_handled: list[str] (recovery only), content: str (markdown body with mermaid), metadata). Enums: `PieceType` (forward, recovery, skill), `PieceStatus` (active, archived, draft).
-- [ ] **P2.2 — Conclusion model** (`src/lib/models.py`): Pydantic model `Conclusion` with `summary: str`, `status: Literal["success", "partial", "failed", "escalated"]`, `key_outputs: dict[str, Any]`, `diagnostics: str | None`. This is the output contract for piece execution (specs/piece-execution.md).
-- [ ] **P2.3 — Routing models** (`src/lib/models.py`): `RoutingDecision` with `mode: Literal["A","B","C","D"]`, `matched_pieces: list[PieceMatch]`, `confidence_scores: dict`, `clarification_prompt: str | None`. `PieceMatch` with `piece_id: str`, `score: float`. `SpawnTask` with `piece_id: str`, `inputs: dict`, `dependencies: list[str]`.
-- [ ] **P2.4 — Sample forward piece**: Create `pieces/forward/sample_lookup.md` — a simple mermaid-diagram workflow (e.g., "look up a record by ID"). Include compact identifier, metadata, mermaid diagram.
-- [ ] **P2.5 — Sample recovery piece**: Create `pieces/recovery/sample_not_found.md` — handles "no results found" response shape.
-- [ ] **P2.6 — Sample skill piece**: Create `pieces/skills/sample_interpretation.md` — domain reasoning for interpreting ambiguous lookup results.
+- [x] **P2.1 — Piece data model** (`src/lib/models.py`): Pydantic models for `Piece` (id, compact_identifier, title, type: forward|recovery|skill, status: active|archived|draft, connections: list of piece IDs, response_shapes_handled: list[str] (recovery only), content: str (markdown body with mermaid), metadata). Enums: `PieceType` (forward, recovery, skill), `PieceStatus` (active, archived, draft).
+- [x] **P2.2 — Conclusion model** (`src/lib/models.py`): Pydantic model `Conclusion` with `summary: str`, `status: Literal["success", "partial", "failed", "escalated"]`, `key_outputs: dict[str, Any]`, `diagnostics: str | None`. This is the output contract for piece execution (specs/piece-execution.md).
+- [x] **P2.3 — Routing models** (`src/lib/models.py`): `RoutingDecision` with `mode: Literal["A","B","C","D"]`, `matched_pieces: list[PieceMatch]`, `confidence_scores: dict`, `clarification_prompt: str | None`. `PieceMatch` with `piece_id: str`, `score: float`. `SpawnTask` with `piece_id: str`, `inputs: dict`, `dependencies: list[str]`.
+- [x] **P2.4 — Sample forward piece**: Create `pieces/forward/sample_lookup.md` — a simple mermaid-diagram workflow (e.g., "look up a record by ID"). Include compact identifier, metadata, mermaid diagram.
+- [x] **P2.5 — Sample recovery piece**: Create `pieces/recovery/sample_not_found.md` — handles "no results found" response shape.
+- [x] **P2.6 — Sample skill piece**: Create `pieces/skills/sample_interpretation.md` — domain reasoning for interpreting ambiguous lookup results.
 
 ## Priority 3 — Atlas: Piece Registry + Embedding Retrieval (specs/atlas.md)
 
-- [ ] **P3.1 — Atlas store** (`src/atlas.py`): Class `Atlas` that manages pieces — load from `pieces/` directory (all subdirs: forward, recovery, skills), store in memory, CRUD operations. Methods: `add_piece()`, `get_piece(id)`, `list_pieces(type, status)`, `archive_piece(id)`, `promote_draft(id)`.
-- [ ] **P3.2 — Embedding index** (`src/lib/embeddings.py`): Embed piece content — compact identifiers + titles + prose description (not just identifiers). Use sentence embeddings (or OpenAI embeddings). Build FAISS index. Method: `search(query, top_k) -> list[(piece_id, score)]`.
-- [ ] **P3.3 — Atlas retrieval integration**: Wire `Atlas.search(query)` to embed the query, search FAISS index, return matched pieces with scores. Include type filtering (forward, recovery, skill).
-- [ ] **P3.4 — Cascade check** (`src/atlas.py`): When a piece is archived/replaced, traverse `connections` to find dependent pieces (including skills referenced by workflows) and flag them for re-examination.
-- [ ] **P3.5 — Tests for atlas**: CRUD, search retrieval (verify compact identifiers improve separability), lifecycle transitions, cascade check, skill storage and retrieval.
+- [x] **P3.1 — Atlas store** (`src/atlas.py`): Class `Atlas` that manages pieces — load from `pieces/` directory (all subdirs: forward, recovery, skills), store in memory, CRUD operations. Methods: `add_piece()`, `get_piece(id)`, `list_pieces(type, status)`, `archive_piece(id)`, `promote_draft(id)`.
+- [x] **P3.2 — Embedding index** (`src/lib/embeddings.py`): Embed piece content — compact identifiers + titles + prose description (not just identifiers). Use sentence embeddings (or OpenAI embeddings). Build FAISS index. Method: `search(query, top_k) -> list[(piece_id, score)]`.
+- [x] **P3.3 — Atlas retrieval integration**: Wire `Atlas.search(query)` to embed the query, search FAISS index, return matched pieces with scores. Include type filtering (forward, recovery, skill).
+- [x] **P3.4 — Cascade check** (`src/atlas.py`): When a piece is archived/replaced, traverse `connections` to find dependent pieces (including skills referenced by workflows) and flag them for re-examination.
+- [x] **P3.5 — Tests for atlas**: CRUD, search retrieval (verify compact identifiers improve separability), lifecycle transitions, cascade check, skill storage and retrieval.
 
 ## Priority 4 — Router: Mode Classification (specs/routing.md)
 

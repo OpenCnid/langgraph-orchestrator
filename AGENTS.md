@@ -1,7 +1,8 @@
 ## Build & Run
 
 - Python 3.11+
-- Install: `pip install -e ".[dev]"` (once pyproject.toml exists)
+- Venv setup: `python3 -m venv .venv && source .venv/bin/activate && pip install -e ".[dev]"`
+- Build backend is `setuptools.build_meta` (not `setuptools.backends._legacy`)
 - Source code in `src/`
 - Shared utilities in `src/lib/`
 
